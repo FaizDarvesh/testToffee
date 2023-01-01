@@ -98,12 +98,7 @@ app.post('/webhook', async (req, res) => {
 
             // Check if user exists.
             // userExists = await User.countDocuments({ phone: from_number }).then((count) => {
-            //     if (count > 0) {
-            //         return count
-            //     } else {
-            //         console.log("Count of matching numbers in DB is ", count);                                        
-            //         return 0
-            //     }
+            //         return count;
             // });
             
             // Fetch user plan by querying the database. Only for trial users we then check count
@@ -137,7 +132,7 @@ app.post('/webhook', async (req, res) => {
 
             // console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
                 
-            // Pass prompt to open AI API if it's longer than two words
+            // If greeting, thanks or unacceptable content, pass prompt to open AI API if it's longer than 5 characters
             try {
                 
                 let message_body_LC = message_body.toLowerCase();
@@ -224,13 +219,13 @@ app.post('/webhook', async (req, res) => {
                     error
                 });
             }
-        }
-
-        else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages) {
+        } else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages) {
+            
+            // For reactions, stickers, images and videos, just respond with an emoji
             console.log(message_content.entry[0].changes[0].value.messages)
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
-            let textResponse = "Sorry for the delay in response! I am facing a lot of traffic"
+            let textResponse = process.env.STANDARD_RESPONSE || ":)";
 
             // Stringify the data to send in JSON format through Whatsapp
             const send_data = JSON.stringify({
@@ -281,11 +276,11 @@ app.post('/webhook', async (req, res) => {
                 // await message.save();
             
             res.sendStatus(200);
-        } else if (message_content.entry[0].changes[0].value.statuses) {
-            res.sendStatus(200);
-        }
 
-        else {
+        } else if (message_content.entry[0].changes[0].value.statuses) {
+            // Just acknowledge status reports that are sent
+            res.sendStatus(200);
+        } else {
             res.sendStatus(404);
         }
     }
@@ -293,5 +288,5 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('This is the backend page. Please close the window!');
+    res.send('This is the test page for Toffee AI. Please visit asktoffee.com!');
 })
