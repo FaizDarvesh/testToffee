@@ -24,6 +24,7 @@ const whatsappToken = process.env.ACCESS_TOKEN;
 const webhook_token = process.env.WEBHOOK_TOKEN;
 
 const dbUrl = process.env.DB_URL;
+mongoose.set('strictQuery', false);
 
 // Connect to Database
 mongoose.connect(dbUrl, {
@@ -81,6 +82,7 @@ app.post('/webhook', async (req, res) => {
     let message_content = req.body;
 
     if(message_content.object){
+        console.log(message_content.entry)
         if(message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages && message_content.entry[0].changes[0].value.messages[0].text) {
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
@@ -225,7 +227,40 @@ app.post('/webhook', async (req, res) => {
             }
         }
 
-        else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages[0].reaction) {
+        else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value) {
+            // Stringify the data to send in JSON format through Whatsapp
+            const send_data = JSON.stringify({
+                "messaging_product": "whatsapp",
+                "preview_url": false,
+                "recipient_type": "individual",
+                "to": from_number,
+                "type": "text",
+                "text": {
+                    "body": "Sorry for the delay in response! I have a lot of traffic"
+                }
+            });
+
+            // Send response using a POST request to Whatsapp API 
+            await axios({
+                method:"POST",
+                url:`https://graph.facebook.com/v15.0/${phone_num_id}/messages`,
+                headers: {
+                    "Authorization": `Bearer ${whatsappToken}`,
+                    "Content-Type": "application/json"
+                    },
+                data: send_data
+            });
+
+            // Save message to MongoDB Collection
+            let message = new Message({
+                body: message_body,
+                response: textResponse,
+                timestamp: Date(),
+                user: from_number
+            })
+
+            await message.save();
+            
             res.sendStatus(200);
         }
 
@@ -239,5 +274,3 @@ app.post('/webhook', async (req, res) => {
 app.get('/', (req, res) => {
     res.send('Hi This is webhook test!');
 })
-
-module.exports = app;
