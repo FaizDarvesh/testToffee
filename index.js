@@ -26,20 +26,20 @@ const webhook_token = process.env.WEBHOOK_TOKEN;
 const dbUrl = process.env.DB_URL;
 
 // Connect to Database
-// mongoose.connect(dbUrl, {
-//     useNewUrlParser: true,
-//     useUnifiedTopology: true
-// });
+mongoose.connect(dbUrl, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
 
-// const db = mongoose.connection; //to shorten the on and once statements below. This assignment not mandatory
+const db = mongoose.connection; //to shorten the on and once statements below. This assignment not mandatory
 
-// db.on("error", console.error.bind(console, "connection error:"));
-// db.once("open", () => {
-//     console.log("Database connected");
-// })
+db.on("error", console.error.bind(console, "connection error:"));
+db.once("open", () => {
+    console.log("Database connected");
+})
 
 let ai_response='';
-const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii"]
+const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii", "ola"]
 const filter = ["erotic", "dick", "porn", "blowjob", "cum ", "pussy", "cock"];
 const thanks = ["thanks", "thank you", "thank", "great"];
 
@@ -81,7 +81,7 @@ app.post('/webhook', async (req, res) => {
     let message_content = req.body;
 
     if(message_content.object){
-        console.log(message_content.entry)
+        console.log(message_content.entry[0].changes[0])
         if(message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages && message_content.entry[0].changes[0].value.messages[0].text) {
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
@@ -97,40 +97,40 @@ app.post('/webhook', async (req, res) => {
             let latestMessage = ""
 
             // Check if user exists.
-            // userExists = await User.countDocuments({ phone: from_number }).then((count) => {
-            //         return count;
-            // });
+            userExists = await User.countDocuments({ phone: from_number }).then((count) => {
+                    return count;
+            });
             
             // Fetch user plan by querying the database. Only for trial users we then check count
-            // if (userExists) {
-            //     userPlan = await User.find({ phone: from_number }, function (err, data) {
-            //         if (err) console.log(err);
-            //     }).clone().catch(function(err){ console.log(err)});
+            if (userExists) {
+                userPlan = await User.find({ phone: from_number }, function (err, data) {
+                    if (err) console.log(err);
+                }).clone().catch(function(err){ console.log(err)});
 
-            //     userStatus = userPlan[0].PaymentStatus; 
-            // }
+                userStatus = userPlan[0].PaymentStatus; 
+            }
 
             // Only count messages for trial
-            // if (userStatus === "trial") {
-            //     messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
-            //         return count
-            //     })
-            // }
+            if (userStatus === "trial") {
+                messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
+                    return count
+                })
+            }
 
             // Check if Context is needed
-            // if (message_body.includes("-continue")) {
-            //         // If so, bring back the record with highest ObjectID timestamp  
-            //         latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
-            //             if (err) console.log(err);
-            //         }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
+            if (message_body.includes("-continue")) {
+                    // If so, bring back the record with highest ObjectID timestamp  
+                    latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
+                        if (err) console.log(err);
+                    }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
                 
-            //         context = latestMessage.body
-            //         context = context.replace('?', '.')
-            //         message_body = message_body.replace('-continue','');
+                    context = latestMessage.body
+                    context = context.replace('?', '.')
+                    message_body = message_body.replace('-continue','');
 
-            // }
+            }
 
-            // console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
+            console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
                 
             // If greeting, thanks or unacceptable content, pass prompt to open AI API if it's longer than 5 characters
             try {
@@ -140,10 +140,10 @@ app.post('/webhook', async (req, res) => {
                 if (userExists === 0) {
                     // User is not registered. UPCOMING FEATURE - REGISTER USERS DIRECTLY - ADD RECORD IN DB
                     await saveUser(from_number);
-                    textResponse = 'Thank you for trying Toffee AI!\n\n You can send 10 requests as a part of your trial. Become a member and support Toffee at https://www.buymeacoffee.com/faizdarvesh. \n\n What can I do for you?'
-                } else if (messageCount>12) {
+                    textResponse = 'Thank you for trying Toffee AI!\n\n You can send 10 requests as a part of your trial. Become a member and support Toffee. \n\n What can I do for you?'
+                } else if (messageCount > 12) {
                     // Inform them that their trial has expired
-                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. You can continue using Toffee by becoming a member at https://www.buymeacoffee.com/faizdarvesh. \n\nWe'll reach out to you to confirm your membership."
+                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. You can continue using Toffee by becoming a member at https://www.buymeacoffee.com/faizdarvesh."
                 } else if (greetings.some(string => message_body_LC.includes(string)) && messageLength<20) {
                     // Manage the 'who are you?' questions internally
                     textResponse = 'Hi! I am Toffee, your AI assistant. Nice to meet you!\n\nI can help you with writing emails, essays, poems and drafting documents, and answering general knowledge questions. I do not know of recent events.\n\nAsk me something!'; 
@@ -195,14 +195,14 @@ app.post('/webhook', async (req, res) => {
                 });
 
                 // Save message to MongoDB Collection
-                // let message = new Message({
-                //     body: message_body,
-                //     response: textResponse,
-                //     timestamp: Date(),
-                //     user: from_number
-                // })
+                let message = new Message({
+                    body: message_body,
+                    response: textResponse,
+                    timestamp: Date(),
+                    user: from_number
+                })
 
-                // await message.save();
+                await message.save();
                 
                 res.sendStatus(200);
 
@@ -252,12 +252,14 @@ app.post('/webhook', async (req, res) => {
                 });
 
                 // Save message to MongoDB Collection
-                // let message = new Message({
-                //     body: "",
-                //     response: textResponse,
-                //     timestamp: Date(),
-                //     user: from_number
-                // });
+                let message = new Message({
+                    body: "",
+                    response: textResponse,
+                    timestamp: Date(),
+                    user: from_number
+                });
+
+                await message.save();
 
             } catch (error) {
                 if (error.response) {
@@ -272,8 +274,6 @@ app.post('/webhook', async (req, res) => {
                     error
                 });
             }
-
-                // await message.save();
             
             res.sendStatus(200);
 
@@ -290,3 +290,20 @@ app.post('/webhook', async (req, res) => {
 app.get('/', (req, res) => {
     res.send('This is the test page for Toffee AI. Please visit asktoffee.com!');
 })
+
+
+//  FUNCTIONS FOR REFACTORING -->
+
+// Save user to DB
+async function saveUser(from_number) {
+    let randomNum = Math.random().toString().substring(2, 10);
+
+    let user = new User({
+        name: `trialUser${randomNum}`,
+        email: `trial${randomNum}@email.com`,
+        phone: from_number,
+        PaymentStatus: "trial"
+    });
+
+    await user.save();
+}
