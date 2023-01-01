@@ -24,20 +24,19 @@ const whatsappToken = process.env.ACCESS_TOKEN;
 const webhook_token = process.env.WEBHOOK_TOKEN;
 
 const dbUrl = process.env.DB_URL;
-mongoose.set('strictQuery', false);
 
 // Connect to Database
-mongoose.connect(dbUrl, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-});
+// mongoose.connect(dbUrl, {
+//     useNewUrlParser: true,
+//     useUnifiedTopology: true
+// });
 
-const db = mongoose.connection; //to shorten the on and once statements below. This assignment not mandatory
+// const db = mongoose.connection; //to shorten the on and once statements below. This assignment not mandatory
 
-db.on("error", console.error.bind(console, "connection error:"));
-db.once("open", () => {
-    console.log("Database connected");
-})
+// db.on("error", console.error.bind(console, "connection error:"));
+// db.once("open", () => {
+//     console.log("Database connected");
+// })
 
 let ai_response='';
 const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii"]
@@ -98,45 +97,45 @@ app.post('/webhook', async (req, res) => {
             let latestMessage = ""
 
             // Check if user exists.
-            userExists = await User.countDocuments({ phone: from_number }).then((count) => {
-                if (count > 0) {
-                    return count
-                } else {
-                    console.log("Count of matching numbers in DB is ", count);                                        
-                    return 0
-                }
-            });
+            // userExists = await User.countDocuments({ phone: from_number }).then((count) => {
+            //     if (count > 0) {
+            //         return count
+            //     } else {
+            //         console.log("Count of matching numbers in DB is ", count);                                        
+            //         return 0
+            //     }
+            // });
             
             // Fetch user plan by querying the database. Only for trial users we then check count
-            if (userExists) {
-                userPlan = await User.find({ phone: from_number }, function (err, data) {
-                    if (err) console.log(err);
-                }).clone().catch(function(err){ console.log(err)});
+            // if (userExists) {
+            //     userPlan = await User.find({ phone: from_number }, function (err, data) {
+            //         if (err) console.log(err);
+            //     }).clone().catch(function(err){ console.log(err)});
 
-                userStatus = userPlan[0].PaymentStatus; 
-            }
+            //     userStatus = userPlan[0].PaymentStatus; 
+            // }
 
             // Only count messages for trial
-            if (userStatus === "trial") {
-                messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
-                    return count
-                })
-            }
+            // if (userStatus === "trial") {
+            //     messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
+            //         return count
+            //     })
+            // }
 
             // Check if Context is needed
-            if (message_body.includes("-continue")) {
-                    // If so, bring back the record with highest ObjectID timestamp  
-                    latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
-                        if (err) console.log(err);
-                    }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
+            // if (message_body.includes("-continue")) {
+            //         // If so, bring back the record with highest ObjectID timestamp  
+            //         latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
+            //             if (err) console.log(err);
+            //         }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
                 
-                    context = latestMessage.body
-                    context = context.replace('?', '.')
-                    message_body = message_body.replace('-continue','');
+            //         context = latestMessage.body
+            //         context = context.replace('?', '.')
+            //         message_body = message_body.replace('-continue','');
 
-            }
+            // }
 
-            console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
+            // console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
                 
             // Pass prompt to open AI API if it's longer than two words
             try {
@@ -201,14 +200,14 @@ app.post('/webhook', async (req, res) => {
                 });
 
                 // Save message to MongoDB Collection
-                let message = new Message({
-                    body: message_body,
-                    response: textResponse,
-                    timestamp: Date(),
-                    user: from_number
-                })
+                // let message = new Message({
+                //     body: message_body,
+                //     response: textResponse,
+                //     timestamp: Date(),
+                //     user: from_number
+                // })
 
-                await message.save();
+                // await message.save();
                 
                 res.sendStatus(200);
 
@@ -227,8 +226,8 @@ app.post('/webhook', async (req, res) => {
             }
         }
 
-        else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value) {
-            console.log(message_content.entry[0].changes[0].value)
+        else if (message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages) {
+            console.log(message_content.entry[0].changes[0].value.messages)
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
             let textResponse = "Sorry for the delay in response! I am facing a lot of traffic"
@@ -258,12 +257,13 @@ app.post('/webhook', async (req, res) => {
                 });
 
                 // Save message to MongoDB Collection
-                let message = new Message({
-                    body: "",
-                    response: textResponse,
-                    timestamp: Date(),
-                    user: from_number
-                });
+                // let message = new Message({
+                //     body: "",
+                //     response: textResponse,
+                //     timestamp: Date(),
+                //     user: from_number
+                // });
+
             } catch (error) {
                 if (error.response) {
                     console.log(error.response.status);
@@ -281,6 +281,8 @@ app.post('/webhook', async (req, res) => {
                 await message.save();
             
             res.sendStatus(200);
+        } else if (message_content.entry[0].changes[0].value.statuses) {
+            res.sendStatus(200);
         }
 
         else {
@@ -291,5 +293,5 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('Hi This is webhook test!');
+    res.send('This is the backend page. Please close the window!');
 })
