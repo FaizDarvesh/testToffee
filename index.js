@@ -278,7 +278,7 @@ app.post('/webhook', async (req, res) => {
                 });
             }
 
-                await message.save();
+                // await message.save();
             
             res.sendStatus(200);
         } else if (message_content.entry[0].changes[0].value.statuses) {
