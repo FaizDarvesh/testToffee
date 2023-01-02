@@ -38,10 +38,13 @@ db.once("open", () => {
     console.log("Database connected");
 })
 
-let ai_response='';
+let ai_response = '';
+let trial_limit = Number(process.env.TRIAL_LIMIT) || 25;
 const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii", "ola"]
 const filter = ["erotic", "dick", "porn", "blowjob", "cum ", "pussy", "cock"];
 const thanks = ["thanks", "thank you", "thank", "great"];
+
+console.log(trial_limit);
 
 // Initialize API configuration
 const configuration = new Configuration({
@@ -68,7 +71,7 @@ app.get('/webhook', (req, res) => {
 
     if(mode && token) {
         console.log(mode, token);
-        if(mode==="subscribe" && token==="testFaiz") {
+        if(mode==="subscribe" && token===webhook_token) {
             res.status(200).send(challenge);
         } else {
             res.status(403);
@@ -94,7 +97,7 @@ app.post('/webhook', async (req, res) => {
             let messageCount = 0;
             let userStatus = "pending";
             let messageLength = message_body.length;
-            let latestMessage = ""
+            let latestMessage = "";
 
             // Check if user exists.
             userExists = await User.countDocuments({ phone: from_number }).then((count) => {
@@ -110,10 +113,10 @@ app.post('/webhook', async (req, res) => {
                 userStatus = userPlan[0].PaymentStatus; 
             }
 
-            // Only count messages for trial
+            // Only count messages for trial users
             if (userStatus === "trial") {
                 messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
-                    return count
+                    return count;
                 })
             }
 
@@ -124,8 +127,8 @@ app.post('/webhook', async (req, res) => {
                         if (err) console.log(err);
                     }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
                 
-                    context = latestMessage.body
-                    context = context.replace('?', '.')
+                    context = latestMessage.body;
+                    context = context.replace('?', '.');
                     message_body = message_body.replace('-continue','');
 
             }
@@ -140,22 +143,22 @@ app.post('/webhook', async (req, res) => {
                 if (userExists === 0) {
                     // User is not registered. UPCOMING FEATURE - REGISTER USERS DIRECTLY - ADD RECORD IN DB
                     await saveUser(from_number);
-                    textResponse = 'Thank you for trying Toffee AI!\n\n You can send 10 requests as a part of your trial. Become a member and support Toffee. \n\n What can I do for you?'
-                } else if (messageCount > 12) {
-                    // Inform them that their trial has expired
-                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. You can continue using Toffee by becoming a member at https://www.buymeacoffee.com/faizdarvesh."
+                    textResponse = `Thank you for trying Toffee AI! You can send ${trial_limit} requests as a part of your trial.\n\n What can I do for you?`
                 } else if (greetings.some(string => message_body_LC.includes(string)) && messageLength<20) {
                     // Manage the 'who are you?' questions internally
-                    textResponse = 'Hi! I am Toffee, your AI assistant. Nice to meet you!\n\nI can help you with writing emails, essays, poems and drafting documents, and answering general knowledge questions. I do not know of recent events.\n\nAsk me something!'; 
+                    textResponse = 'Hi! I am Toffee, your AI assistant. Nice to meet you!\n\nI can help you with writing emails, essays, poems and drafting documents, and answering general knowledge questions. I do not know of recent events.\n\nWhat can I do for you today?'; 
                 } else if (thanks.some(string => message_body_LC.includes(string)) && messageLength<15) {
                     textResponse = "You're welcome! Have a nice day!"
                 } else if (messageLength < 5) {
                     // Manage the super short prompts - ask for more detail
                     textResponse = 'I am sorry! Can you please provide more information?'
                 } else if (filter.some(string => message_body_LC.includes(string))) {
-                    textResponse = "Sorry, your request violates the usage policy for Toffee and Open AI. You are advised to adhere to the usage guidelines. Please consider this a warning.\n\nIf you feel this was in error, please reach out to feedback@faizdarvesh.com."
-                } else if (messageLength > 300) {
+                    textResponse = "Sorry, your request violates the usage policy for Toffee and Open AI. You are advised to adhere to the usage guidelines. Please consider this a warning.\n\nIf you feel this message was an error, please reach out to feedback@faizdarvesh.com."
+                } else if (messageLength > 400) {
                     textResponse = 'Sorry, that is too lengthy for me to process right away. Can you please ask that more concisely?'
+                } else if (messageCount > trial_limit) {
+                    // Inform them that their trial has expired
+                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. You can continue using Toffee by becoming a member at https://www.buymeacoffee.com/faizdarvesh."
                 } else {
                     
                     console.log("Context is", context, ". message body is", message_body);
@@ -163,8 +166,8 @@ app.post('/webhook', async (req, res) => {
                     // Fetch AI response to your question
                     ai_response = await openai.createCompletion({
                         model: "text-davinci-003",
-                        prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. \n ${context}. \n ${message_body}.`,
-                        max_tokens: 300,
+                        prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. Help me complete this request. \n ${context}. \n ${message_body}.`,
+                        max_tokens: 350,
                         temperature: 0.1,
                     });
                     
@@ -307,3 +310,9 @@ async function saveUser(from_number) {
 
     await user.save();
 }
+
+// Fetch AI response
+
+// Fetch image from unsplash and send through Whatsapp
+
+// Send emails
