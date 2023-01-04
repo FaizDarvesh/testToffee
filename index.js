@@ -196,7 +196,7 @@ app.post('/webhook', async (req, res) => {
                 }
 
                 // Save message to MongoDB Collection
-                await saveMessageToDB(message_body, textResponse, from_number)
+                // await saveMessageToDB(message_body, textResponse, from_number)
 
                 // Stringify date and send message response
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
@@ -228,7 +228,7 @@ app.post('/webhook', async (req, res) => {
             try {
                 
                 // Save message to MongoDB Collection
-                await saveMessageToDB("reaction", textResponse, from_number)
+                // await saveMessageToDB("reaction", textResponse, from_number)
 
                 // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
@@ -290,7 +290,7 @@ async function fetchAIResponse(context, message_body) {
     ai_response = await openai.createCompletion({
         model: "text-davinci-003",
         prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. Help me complete this request. \n ${context}. \n ${message_body}.`,
-        max_tokens: 350,
+        max_tokens: 300,
         temperature: 0.1,
     });
     
@@ -447,3 +447,5 @@ async function fetchLocation(locationSubject) {
     }
 
 }
+
+// Add abort Controller to abort requests
