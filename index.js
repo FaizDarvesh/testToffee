@@ -109,6 +109,7 @@ app.post('/webhook', async (req, res) => {
             let userStatus = "pending";
             let messageLength = message_body.length;
             let latestMessage = "";
+            responseType=0;
 
             // Check if user exists.
             userExists = await User.countDocuments({ phone: from_number }).then((count) => {
@@ -301,7 +302,7 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
     let send_data = {};
 
     // Check if text or media using responseType
-    if (responseType == "image") {
+    if (responseType === "image") {
         
         send_data = JSON.stringify({
             "messaging_product": "whatsapp",
@@ -313,7 +314,7 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
             }
         });
 
-    } else if (responseType == "location") {
+    } else if (responseType === "location") {
 
         locationParams = textResponse.split(";");
         let locName = locationParams[0].toUpperCase();
@@ -357,6 +358,8 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
             },
         data: send_data
     });
+
+    responseType=0;
 
 }
 
