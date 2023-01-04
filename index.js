@@ -226,10 +226,10 @@ app.post('/webhook', async (req, res) => {
             try {
                 
                 // Save message to MongoDB Collection
-                saveMessageToDB(message_body, textResponse, from_number)
+                saveMessageToDB("reaction", textResponse, from_number)
 
                 // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
-                sendReply(from_number, textResponse, phone_num_id, whatsappToken)
+                sendReply(from_number, textResponse, phone_num_id, whatsappToken, 0)
 
             } catch (error) {
                 if (error.response) {
