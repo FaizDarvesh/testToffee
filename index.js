@@ -146,7 +146,7 @@ app.post('/webhook', async (req, res) => {
 
             }
 
-            console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", latestMessage)
+            console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", context)
                 
             // If greeting, thanks or unacceptable content, pass prompt to open AI API if it's longer than 5 characters
             try {
@@ -167,12 +167,12 @@ app.post('/webhook', async (req, res) => {
                     textResponse = 'I am sorry! Can you please provide more information?'
                 } else if (filter.some(string => message_body_LC.includes(string))) {
                     textResponse = "Sorry, your request violates the usage policy for Toffee and Open AI. You are advised to adhere to the usage guidelines. Please consider this a warning.\n\nIf you feel this message was an error, please reach out to feedback@faizdarvesh.com."
-                } else if (messageLength > 400) {
+                } else if (messageLength > 450) {
                     textResponse = 'Sorry, that is too lengthy for me to process right away. Can you please ask that more concisely?'
                 } else if (messageCount > trial_limit) {
                     // Inform them that their trial has expired
                     textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. Please email feedback@faizdarvesh.com if you'd like to continue using Toffee."
-                } else if (messageLength<50 && (message_body_LC.includes("send image of") || message_body_LC.endsWith(" pics"))) {
+                } else if ((message_body_LC.includes("send image of") || message_body_LC.endsWith(" pics")) && messageLength<50) {
                     
                     let imageSubject = message_body_LC.split('send image of')[1] || message_body_LC.split('pics')[0];
                     console.log(imageSubject);
@@ -181,7 +181,7 @@ app.post('/webhook', async (req, res) => {
                     let imageURL = await fetchImage(imageSubject);
                     textResponse = imageURL;
 
-                } else if (messageLength<50 && (message_body_LC.includes("send location of"))) {
+                } else if ((message_body_LC.includes("send location of")) && messageLength<50) {
                     
                     let locationSubject = message_body_LC.split('send location of')[1];
                     console.log(locationSubject);
@@ -233,6 +233,8 @@ app.post('/webhook', async (req, res) => {
                 // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
 
+                res.sendStatus(200);
+
             } catch (error) {
                 if (error.response) {
                     console.log(error.response.status);
@@ -246,12 +248,11 @@ app.post('/webhook', async (req, res) => {
                     error
                 });
             }
-            
-            res.sendStatus(200);
 
         } else if (message_content.entry[0].changes[0].value.statuses) {
             // Just acknowledge status reports that are sent
             res.sendStatus(200);
+            
         } else {
             res.sendStatus(404);
         }
