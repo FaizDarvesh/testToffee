@@ -12,7 +12,10 @@ const User = require('./models/user');
 // const MongoStore = require("connect-mongo");
 const mongoSanitize = require('express-mongo-sanitize');
 
+// Initialize Open AI and Unsplash libraries
 const { Configuration, OpenAIApi } = require("openai");
+
+const { createApi } = require("unsplash-js");
 
 // Initialize app
 const app = express();
@@ -46,12 +49,18 @@ const thanks = ["thanks", "thank you", "thank", "great"];
 
 console.log(trial_limit);
 
-// Initialize API configuration
+// Initialize API configuration for Open AI
 const configuration = new Configuration({
     apiKey: process.env.OPENAI_API_KEY,
 });
   
 const openai = new OpenAIApi(configuration);
+
+// Initialize API configuration for Unsplash
+const unsplash = createApi({
+    accessKey: process.env.UNSPLASH_ACCESS_KEY,
+});
+
 
 // Enable body parser
 app.use(body_parser.json());
@@ -98,6 +107,7 @@ app.post('/webhook', async (req, res) => {
             let userStatus = "pending";
             let messageLength = message_body.length;
             let latestMessage = "";
+            let responseType = 0;
 
             // Check if user exists.
             userExists = await User.countDocuments({ phone: from_number }).then((count) => {
@@ -158,54 +168,25 @@ app.post('/webhook', async (req, res) => {
                     textResponse = 'Sorry, that is too lengthy for me to process right away. Can you please ask that more concisely?'
                 } else if (messageCount > trial_limit) {
                     // Inform them that their trial has expired
-                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. You can continue using Toffee by becoming a member at https://www.buymeacoffee.com/faizdarvesh."
+                    textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. Please email feedback@faizdarvesh.com if you'd like to continue using Toffee."
+                } else if (message_body_LC.includes("get an image of")) {
+                    
+                    let imageSubject = message_body_LC.split('get an image of')[1];
+                    console.log(imageSubject);
+                    let imageURL = await fetchImage(imageSubject);
+                    textResponse = imageURL;
+                    responseType = "image";
+                    
                 } else {
-                    
-                    console.log("Context is", context, ". message body is", message_body);
-
                     // Fetch AI response to your question
-                    ai_response = await openai.createCompletion({
-                        model: "text-davinci-003",
-                        prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. Help me complete this request. \n ${context}. \n ${message_body}.`,
-                        max_tokens: 350,
-                        temperature: 0.1,
-                    });
-                    
-                    textResponse = ai_response.data.choices[0].text;
+                    textResponse = await fetchAIResponse(context, message_body);           
                 }
 
-                // Stringify the data to send in JSON format through Whatsapp
-                const send_data = JSON.stringify({
-                    "messaging_product": "whatsapp",
-                    "preview_url": false,
-                    "recipient_type": "individual",
-                    "to": from_number,
-                    "type": "text",
-                    "text": {
-                        "body": textResponse
-                    }
-                });
-    
-                // Send response using a POST request to Whatsapp API 
-                await axios({
-                    method:"POST",
-                    url:`https://graph.facebook.com/v15.0/${phone_num_id}/messages`,
-                    headers: {
-                        "Authorization": `Bearer ${whatsappToken}`,
-                        "Content-Type": "application/json"
-                        },
-                    data: send_data
-                });
-
                 // Save message to MongoDB Collection
-                let message = new Message({
-                    body: message_body,
-                    response: textResponse,
-                    timestamp: Date(),
-                    user: from_number
-                })
+                await saveMessageToDB(message_body, textResponse, from_number)
 
-                await message.save();
+                // Stringify date and send message response
+                await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
                 
                 res.sendStatus(200);
 
@@ -230,39 +211,13 @@ app.post('/webhook', async (req, res) => {
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
             let textResponse = process.env.STANDARD_RESPONSE || ":)";
 
-            // Stringify the data to send in JSON format through Whatsapp
-            const send_data = JSON.stringify({
-                "messaging_product": "whatsapp",
-                "preview_url": false,
-                "recipient_type": "individual",
-                "to": from_number,
-                "type": "text",
-                "text": {
-                    "body": textResponse
-                }
-            });
-
             try {
-                // Send response using a POST request to Whatsapp API 
-                await axios({
-                    method:"POST",
-                    url:`https://graph.facebook.com/v15.0/${phone_num_id}/messages`,
-                    headers: {
-                        "Authorization": `Bearer ${whatsappToken}`,
-                        "Content-Type": "application/json"
-                        },
-                    data: send_data
-                });
-
+                
                 // Save message to MongoDB Collection
-                let message = new Message({
-                    body: "",
-                    response: textResponse,
-                    timestamp: Date(),
-                    user: from_number
-                });
+                saveMessageToDB(message_body, textResponse, from_number)
 
-                await message.save();
+                // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
+                sendReply(from_number, textResponse, phone_num_id, whatsappToken)
 
             } catch (error) {
                 if (error.response) {
@@ -311,8 +266,102 @@ async function saveUser(from_number) {
     await user.save();
 }
 
+
 // Fetch AI response
+async function fetchAIResponse(context, message_body) {
+    console.log("Context is", context, ". message body is", message_body);
+
+    // Fetch AI response to your question
+    ai_response = await openai.createCompletion({
+        model: "text-davinci-003",
+        prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. Help me complete this request. \n ${context}. \n ${message_body}.`,
+        max_tokens: 350,
+        temperature: 0.1,
+    });
+    
+    return ai_response.data.choices[0].text;
+}
+
+
+// Send whatsapp message            
+async function sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType) {
+    
+    // Stringify the data to send in JSON format through Whatsapp
+    let send_data = {};
+
+    // Check if text or media using responseType
+    if (responseType) {
+        
+        send_data = JSON.stringify({
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": from_number,
+            "type": "image",
+            "image": {
+                "link": textResponse
+            }
+        });
+
+    } else {
+        // If not media then text
+        send_data = JSON.stringify({
+            "messaging_product": "whatsapp",
+            "preview_url": false,
+            "recipient_type": "individual",
+            "to": from_number,
+            "type": "text",
+            "text": {
+                "body": textResponse
+            }
+        });
+    }
+
+    // Send response using a POST request to Whatsapp API 
+    await axios({
+        method:"POST",
+        url:`https://graph.facebook.com/v15.0/${phone_num_id}/messages`,
+        headers: {
+            "Authorization": `Bearer ${whatsappToken}`,
+            "Content-Type": "application/json"
+            },
+        data: send_data
+    });
+
+}
+
+
+// Save message in DB, separate for save image url in DB
+async function saveMessageToDB(message_body, textResponse, from_number) {
+    
+    // Save message to MongoDB Collection
+    let message = new Message({
+        body: message_body,
+        response: textResponse,
+        timestamp: Date(),
+        user: from_number
+    });
+
+    await message.save();
+}
+
 
 // Fetch image from unsplash and send through Whatsapp
 
-// Send emails
+async function fetchImage(imageSubject) {
+    
+    let unsplashResponse = await unsplash.search.getPhotos({
+        query: imageSubject,
+        page: 1,
+        perPage: 10,
+    });
+
+    let indexOfImage = Math.floor(Math.random() * 10) + 1
+
+    imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
+    return imgURL;
+
+}
+
+// Send email from toffee email, and reply with confirmation
+
+// Fetch google maps location based on input and send location. if error, respond with text 
