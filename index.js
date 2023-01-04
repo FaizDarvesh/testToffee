@@ -96,6 +96,7 @@ app.post('/webhook', async (req, res) => {
 
     if(message_content.object){
         console.log(message_content.entry[0].changes[0])
+
         if(message_content.entry && message_content.entry[0].changes && message_content.entry[0].changes[0].value.messages && message_content.entry[0].changes[0].value.messages[0].text) {
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
@@ -222,14 +223,15 @@ app.post('/webhook', async (req, res) => {
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
             let textResponse = process.env.STANDARD_RESPONSE || ":)";
+            responseType = 0;
 
             try {
                 
                 // Save message to MongoDB Collection
-                saveMessageToDB("reaction", textResponse, from_number)
+                await saveMessageToDB("reaction", textResponse, from_number)
 
                 // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
-                sendReply(from_number, textResponse, phone_num_id, whatsappToken, 0)
+                await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
 
             } catch (error) {
                 if (error.response) {
@@ -387,10 +389,10 @@ async function fetchImage(imageSubject) {
         let unsplashResponse = await unsplash.search.getPhotos({
             query: imageSubject,
             page: 1,
-            perPage: 10,
+            perPage: 5,
         });
         
-        let indexOfImage = Math.floor(Math.random() * 10) + 1
+        let indexOfImage = Math.floor(Math.random() * 5) + 1
         
         imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
         return imgURL;
