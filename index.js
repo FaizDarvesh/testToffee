@@ -25,6 +25,7 @@ const port = process.env.PORT || 8500;
 const whatsappToken = process.env.ACCESS_TOKEN;
 // const whatsappToken = process.env.TEMP_ACCESS_TOKEN;
 const webhook_token = process.env.WEBHOOK_TOKEN;
+const gmap_key = process.env.GMAPS_TOKEN;
 
 const dbUrl = process.env.DB_URL;
 
@@ -42,6 +43,7 @@ db.once("open", () => {
 })
 
 let ai_response = '';
+let responseType = 0;
 let trial_limit = Number(process.env.TRIAL_LIMIT) || 25;
 const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii", "ola"]
 const filter = ["erotic", "dick", "porn", "blowjob", "cum ", "pussy", "cock"];
@@ -107,7 +109,6 @@ app.post('/webhook', async (req, res) => {
             let userStatus = "pending";
             let messageLength = message_body.length;
             let latestMessage = "";
-            let responseType = 0;
 
             // Check if user exists.
             userExists = await User.countDocuments({ phone: from_number }).then((count) => {
@@ -169,14 +170,24 @@ app.post('/webhook', async (req, res) => {
                 } else if (messageCount > trial_limit) {
                     // Inform them that their trial has expired
                     textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. Please email feedback@faizdarvesh.com if you'd like to continue using Toffee."
-                } else if (message_body_LC.includes("get an image of")) {
+                } else if (messageLength<50 && (message_body_LC.includes("send image of") || message_body_LC.endsWith(" pics"))) {
                     
-                    let imageSubject = message_body_LC.split('get an image of')[1];
+                    let imageSubject = message_body_LC.split('send image of')[1] || message_body_LC.split('pics')[0];
                     console.log(imageSubject);
-                    let imageURL = await fetchImage(imageSubject);
-                    textResponse = imageURL;
                     responseType = "image";
                     
+                    let imageURL = await fetchImage(imageSubject);
+                    textResponse = imageURL;
+
+                } else if (messageLength<50 && (message_body_LC.includes("send location of"))) {
+                    
+                    let locationSubject = message_body_LC.split('send location of')[1];
+                    console.log(locationSubject);
+                    responseType = "location";
+                    
+                    let locationURL = await fetchLocation(locationSubject);
+                    textResponse = locationURL;
+
                 } else {
                     // Fetch AI response to your question
                     textResponse = await fetchAIResponse(context, message_body);           
@@ -290,7 +301,7 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
     let send_data = {};
 
     // Check if text or media using responseType
-    if (responseType) {
+    if (responseType == "image") {
         
         send_data = JSON.stringify({
             "messaging_product": "whatsapp",
@@ -299,6 +310,26 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
             "type": "image",
             "image": {
                 "link": textResponse
+            }
+        });
+
+    } else if (responseType == "location") {
+
+        locationParams = textResponse.split(";");
+        let locName = locationParams[0].toUpperCase();
+        let latValue = locationParams[1];
+        let longValue = locationParams[2];
+        let locAddress = locationParams[3];
+        
+        send_data = JSON.stringify({
+            "messaging_product": "whatsapp",
+            "to": from_number,
+            "type": "location",
+            "location": {
+                "longitude": longValue,
+                "latitude": latValue,
+                "name": locName,
+                "address": locAddress
             }
         });
 
@@ -346,22 +377,67 @@ async function saveMessageToDB(message_body, textResponse, from_number) {
 
 
 // Fetch image from unsplash and send through Whatsapp
-
 async function fetchImage(imageSubject) {
     
-    let unsplashResponse = await unsplash.search.getPhotos({
-        query: imageSubject,
-        page: 1,
-        perPage: 10,
-    });
+    try {
 
-    let indexOfImage = Math.floor(Math.random() * 10) + 1
+        let unsplashResponse = await unsplash.search.getPhotos({
+            query: imageSubject,
+            page: 1,
+            perPage: 10,
+        });
+        
+        let indexOfImage = Math.floor(Math.random() * 10) + 1
+        
+        imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
+        return imgURL;
 
-    imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
-    return imgURL;
+    } catch(error) {
+        
+        console.error(">>", error.message);
+        responseType = 0;
+        return `Sorry, I could not find an image on ${imageSubject}.`;
+
+    }
 
 }
 
 // Send email from toffee email, and reply with confirmation
 
 // Fetch google maps location based on input and send location. if error, respond with text 
+async function fetchLocation(locationSubject) {
+    
+    try{ 
+    
+        let gmapResponse = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${locationSubject}&key=${gmap_key}`)
+
+        // If the request was successful, extract the latitude and longitude from the response
+        if (gmapResponse.ok) {
+
+            const data = await gmapResponse.json();
+            
+            if(data.results.length) {
+
+                let latitude = data.results[0].geometry.location.lat;
+                let longitude = data.results[0].geometry.location.lng;
+                let formatted_address = data.results[0].formatted_address;
+                let addressString = `${locationSubject};${latitude};${longitude};${formatted_address}`;
+                return addressString;
+            
+            }
+
+            //  If return above does not run, then we reply a text message
+            responseType = 0;
+            return "I could not find the specified address.";    
+
+        } 
+
+    } catch (error) {
+        
+        console.error(">>", error.message);
+        responseType = 0;
+        textResponse = "I could not find the specified address.";
+
+    }
+
+}
