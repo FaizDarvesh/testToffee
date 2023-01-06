@@ -157,6 +157,8 @@ app.post('/webhook', async (req, res) => {
                     // User is not registered. UPCOMING FEATURE - REGISTER USERS DIRECTLY - ADD RECORD IN DB
                     await saveUser(from_number);
                     textResponse = `Thank you for trying Toffee AI! You can send ${trial_limit} requests as a part of your trial.\n\n What can I do for you?`
+                } else if (userStatus === "blocked") {
+                    res.sendStatus(200);
                 } else if (greetings.some(string => message_body_LC.includes(string)) && messageLength<20) {
                     // Manage the 'who are you?' questions internally
                     textResponse = 'Hi! I am Toffee, your AI assistant. Nice to meet you!\n\nI can help you with writing emails, essays, poems and drafting documents, and answering general knowledge questions. I do not know of recent events.\n\nWhat can I do for you today?'; 
@@ -195,13 +197,22 @@ app.post('/webhook', async (req, res) => {
                     textResponse = await fetchAIResponse(context, message_body);           
                 }
 
-                // Save message to MongoDB Collection
-                // await saveMessageToDB(message_body, textResponse, from_number)
-
                 // Stringify date and send message response
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
+
                 
-                res.sendStatus(200);
+                try {
+                    
+                    // Save message to MongoDB Collection
+                    await saveMessageToDB(message_body, textResponse, from_number)
+                    res.sendStatus(200);
+
+                } catch (e) {
+                    
+                    res.sendStatus(200);
+
+                }
+                
 
             } catch (error) {
                 if (error.response) {
@@ -227,13 +238,19 @@ app.post('/webhook', async (req, res) => {
 
             try {
                 
-                // Save message to MongoDB Collection
-                // await saveMessageToDB("reaction", textResponse, from_number)
-
                 // First save message and then reply since if DB connection is not working, it'll reattempt multiple times
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
 
-                res.sendStatus(200);
+                try {
+                    // Save message to MongoDB Collection
+                    await saveMessageToDB("reaction", textResponse, from_number)
+                    res.sendStatus(200);
+                    
+                } catch (e) {
+                    res.sendStatus(200);
+                }
+
+
 
             } catch (error) {
                 if (error.response) {
@@ -380,7 +397,6 @@ async function saveMessageToDB(message_body, textResponse, from_number) {
 
     await message.save();
 }
-
 
 // Fetch image from unsplash and send through Whatsapp
 async function fetchImage(imageSubject) {
