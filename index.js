@@ -123,9 +123,23 @@ app.post('/webhook', async (req, res) => {
                     if (err) console.log(err);
                 }).clone().catch(function(err){ console.log(err)});
 
-                userStatus = userPlan[0].PaymentStatus; 
+                userStatus = userPlan[0].PaymentStatus;
+
+                // Find recent message for context
+                latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
+                    if (err) console.log(err);
+                }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
+            
+                context = latestMessage.body;
+                context = context.replace('?', '.');
+                message_body = message_body.replace('-continue','');
             }
 
+            if (userStatus === "blocked") {
+                res.sendStatus(200);
+                return;
+            }
+            
             // Only count messages for trial users
             if (userStatus === "trial") {
                 messageCount = await Message.countDocuments({ user: from_number }).then((count) => {
@@ -134,17 +148,16 @@ app.post('/webhook', async (req, res) => {
             }
 
             // Check if Context is needed
-            if (message_body.includes("-continue")) {
-                    // If so, bring back the record with highest ObjectID timestamp  
-                    latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
-                        if (err) console.log(err);
-                    }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
+            // if (message_body.includes("-continue")) {
+            //         // If so, bring back the record with highest ObjectID timestamp  
+            //         latestMessage = await Message.findOne({ user: from_number }, function (err, data) {
+            //             if (err) console.log(err);
+            //         }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
                 
-                    context = latestMessage.body;
-                    context = context.replace('?', '.');
-                    message_body = message_body.replace('-continue','');
-
-            }
+            //         context = latestMessage.body;
+            //         context = context.replace('?', '.');
+            //         message_body = message_body.replace('-continue','');
+            // }
 
             console.log(">>>", messageCount, "from", userExists, "user(s). Latest Message is ", context)
                 
@@ -169,14 +182,14 @@ app.post('/webhook', async (req, res) => {
                     textResponse = 'I am sorry! Can you please provide more information?'
                 } else if (filter.some(string => message_body_LC.includes(string))) {
                     textResponse = "Sorry, your request violates the usage policy for Toffee and Open AI. You are advised to adhere to the usage guidelines. Please consider this a warning.\n\nIf you feel this message was an error, please reach out to feedback@faizdarvesh.com."
-                } else if (messageLength > 450) {
+                } else if (messageLength > 950) {
                     textResponse = 'Sorry, that is too lengthy for me to process right away. Can you please ask that more concisely?'
                 } else if (messageCount > trial_limit) {
                     // Inform them that their trial has expired
                     textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. Please email feedback@faizdarvesh.com if you'd like to continue using Toffee."
                 } else if ((message_body_LC.includes("send image of") || message_body_LC.endsWith(" pics")) && messageLength<50) {
                     
-                    let imageSubject = message_body_LC.split('send image of')[1] || message_body_LC.split('pics')[0];
+                    let imageSubject = message_body_LC.split('send image of ')[1] || message_body_LC.split(' pics')[0];
                     console.log(imageSubject);
                     responseType = "image";
                     
@@ -191,6 +204,13 @@ app.post('/webhook', async (req, res) => {
                     
                     let locationURL = await fetchLocation(locationSubject);
                     textResponse = locationURL;
+
+                } else if (message_body_LC.includes("wiki of")) {
+
+                    let wikiSubject = message_body_LC.split('wiki of ')[1];
+                    console.log(wikiSubject);
+                    let wikiDetails = await fetchWiki(wikiSubject);
+                    textResponse = wikiDetails;
 
                 } else {
                     // Fetch AI response to your question
@@ -304,14 +324,18 @@ async function fetchAIResponse(context, message_body) {
     console.log("Context is", context, ". message body is", message_body);
 
     // Fetch AI response to your question
-    ai_response = await openai.createCompletion({
-        model: "text-davinci-003",
-        prompt: `Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing. Help me complete this request. \n ${context}. \n ${message_body}.`,
-        max_tokens: 300,
+    ai_response = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: [
+            {role: "system", content: "Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing."},
+            {role: "user", content: `As Toffee, help me complete this request. ${context}.`},
+            {role: "user", content: `${message_body}.`}
+        ],
+        max_tokens: 400,
         temperature: 0.1,
     });
-    
-    return ai_response.data.choices[0].text;
+
+    return ai_response.data.choices[0].message.content;
 }
 
 
@@ -464,4 +488,48 @@ async function fetchLocation(locationSubject) {
 
 }
 
+// Fetch wiki article and share description and URL of article
+
+async function fetchWiki(wikiSubject) {
+    
+    try{ 
+    
+        let wikiDescription = '';
+        let articleURL = '';
+        let wikiResponse = await fetch(`https://api.wikimedia.org/core/v1/wikipedia/en/search/page?q=${wikiSubject}&limit=1`)
+
+        // If the request was successful, extract the latitude and longitude from the response
+        if (wikiResponse.ok) {
+            const wikiData = await wikiResponse.json();
+
+            if(wikiData.pages.length) {
+                
+                try{
+                    if(wikiData.pages[0].description === null) {
+                        wikiDescription = 'The closest Wikipedia article I found is :'
+                    } else {
+                        wikiDescription = 'Wikipedia article on ' + wikiData.pages[0].description + ':';
+                    }
+                } catch {
+                    wikiDescription = `Wikipedia article on ${wikiSubject} linked below`
+                }
+                articleURL = 'https://en.wikipedia.org/wiki/' + wikiData.pages[0].key;
+                
+                wikiAnswer = `${wikiDescription}\n\n${articleURL}`
+
+                return wikiAnswer
+            }
+        }
+
+        return `No wikipedia article exists for ${wikiSubject}. Please give me a different topic to look up`;
+
+    } catch (error) {
+        
+        console.error(">>>", error.message);
+        responseType = 0;
+        return "I could not find an article on the subject. Please try again after some time.";
+
+    }
+
+}
 // Add abort Controller to abort requests
