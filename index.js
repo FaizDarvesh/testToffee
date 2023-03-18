@@ -44,7 +44,7 @@ db.once("open", () => {
 
 let ai_response = '';
 let responseType = 0;
-let trial_limit = Number(process.env.TRIAL_LIMIT) || 25;
+let trial_limit = Number(process.env.TRIAL_LIMIT) || 50;
 const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii", "ola"]
 const filter = ["erotic", "dick", "porn", "blowjob", "cum ", "pussy", "cock"];
 const thanks = ["thanks", "thank you", "thank", "great"];
@@ -105,6 +105,7 @@ app.post('/webhook', async (req, res) => {
             console.log(`Message from ${from_number} - ${message_body}`)
             let textResponse = '';
             let context = '';
+            let contextReply = '';
             let userExists = 1;
             let messageCount = 0;
             let userStatus = "pending";
@@ -131,8 +132,7 @@ app.post('/webhook', async (req, res) => {
                 }).sort({ _id: -1 }).clone().catch(function(err){ console.log(err)});
             
                 context = latestMessage.body;
-                context = context.replace('?', '.');
-                message_body = message_body.replace('-continue','');
+                contextReply = latestMessage.response.substring(0, 50);
             }
 
             if (userStatus === "blocked") {
@@ -172,9 +172,9 @@ app.post('/webhook', async (req, res) => {
                     textResponse = `Thank you for trying Toffee AI! You can send ${trial_limit} requests as a part of your trial.\n\n What can I do for you?`
                 } else if (userStatus === "blocked") {
                     res.sendStatus(200);
-                } else if (greetings.some(string => message_body_LC.includes(string)) && messageLength<20) {
+                } else if (greetings.some(string => message_body_LC.includes(string)) && messageLength<12) {
                     // Manage the 'who are you?' questions internally
-                    textResponse = 'Hi! I am Toffee, your AI assistant. Nice to meet you!\n\nI can help you with writing emails, essays, poems and drafting documents, and answering general knowledge questions. I do not know of recent events.\n\nWhat can I do for you today?'; 
+                    textResponse = 'Hi! I am Toffee, your AI assistant!\n\nI can help you with writing emails, drafting documents, looking up images, searching for Maps locations, wikipedia articles and answering questions. I do not know of recent events. Here are a few things you can try: \n\n ✒ Generate content, documents and responses: Ask me to write you an email, text or come up with a social media post on any topic!\n\n 🖼  Search images: Type "/image" and then the subject and I will lookup Unsplash for matching images. \n\n 📌  Find location: Type "/location" and then the destination and I will try to find the location on Google Maps. \n\n 🔍  Lookup Wikipedia: Type "/wiki" and the topic for matching wikipedia articles. \n\nWhat can I do for you today?'; 
                 } else if (thanks.some(string => message_body_LC.includes(string)) && messageLength<15) {
                     textResponse = "You're welcome! Have a nice day!"
                 } else if (messageLength < 5) {
@@ -187,36 +187,37 @@ app.post('/webhook', async (req, res) => {
                 } else if (messageCount > trial_limit) {
                     // Inform them that their trial has expired
                     textResponse = "Your trial has ended!\n\nThank you for trying Toffee! I hope you liked it. Please email feedback@faizdarvesh.com if you'd like to continue using Toffee."
-                } else if ((message_body_LC.includes("send image of") || message_body_LC.endsWith(" pics")) && messageLength<50) {
+                } else if ((message_body_LC.startsWith("/image")) && messageLength<50) {
                     
-                    let imageSubject = message_body_LC.split('send image of ')[1] || message_body_LC.split(' pics')[0];
+                    let imageSubject = message_body_LC.split('/image ')[1];
                     console.log(imageSubject);
                     responseType = "image";
                     
                     let imageURL = await fetchImage(imageSubject);
                     textResponse = imageURL;
 
-                } else if ((message_body_LC.includes("send location of")) && messageLength<50) {
+                } else if ((message_body_LC.startsWith("/location")) && messageLength<50) {
                     
-                    let locationSubject = message_body_LC.split('send location of')[1];
+                    let locationSubject = message_body_LC.split("/location")[1];
                     console.log(locationSubject);
                     responseType = "location";
                     
                     let locationURL = await fetchLocation(locationSubject);
                     textResponse = locationURL;
 
-                } else if (message_body_LC.includes("wiki of")) {
+                } else if (message_body_LC.startsWith("/wiki")) {
 
-                    let wikiSubject = message_body_LC.split('wiki of ')[1];
+                    let wikiSubject = message_body_LC.split('/wiki ')[1];
                     console.log(wikiSubject);
                     let wikiDetails = await fetchWiki(wikiSubject);
                     textResponse = wikiDetails;
 
                 } else {
                     // Fetch AI response to your question
-                    textResponse = await fetchAIResponse(context, message_body);           
+                    textResponse = await fetchAIResponse(context, contextReply, message_body);
                 }
-
+                
+                console.log(textResponse);        
                 // Stringify date and send message response
                 await sendReply(from_number, textResponse, phone_num_id, whatsappToken, responseType)
 
@@ -320,8 +321,8 @@ async function saveUser(from_number) {
 
 
 // Fetch AI response
-async function fetchAIResponse(context, message_body) {
-    console.log("Context is", context, ". message body is", message_body);
+async function fetchAIResponse(context, contextReply, message_body) {
+    console.log("Context is", context, ". Context reply is", contextReply, ". Message body is", message_body);
 
     // Fetch AI response to your question
     ai_response = await openai.createChatCompletion({
@@ -329,9 +330,10 @@ async function fetchAIResponse(context, message_body) {
         messages: [
             {role: "system", content: "Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing."},
             {role: "user", content: `As Toffee, help me complete this request. ${context}.`},
+            {role: "assistant", content: `${contextReply}.`},
             {role: "user", content: `${message_body}.`}
         ],
-        max_tokens: 400,
+        max_tokens: 450,
         temperature: 0.1,
     });
 
