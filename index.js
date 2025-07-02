@@ -1,21 +1,44 @@
 // All the requires
-const express = require('express');
-const path = require('path');
-const axios = require('axios');
-const body_parser=require("body-parser");
+// const express = require('express');
+// const path = require('path');
+// const axios = require('axios');
+// const body_parser=require("body-parser");
 
-const dotenv = require('dotenv').config();
+// const dotenv = require('dotenv').config();
 
-const mongoose = require('mongoose');
-const Message = require('./models/messages');
-const User = require('./models/user');
-// const MongoStore = require("connect-mongo");
-const mongoSanitize = require('express-mongo-sanitize');
+// const mongoose = require('mongoose');
+// const Message = require('./models/messages');
+// const User = require('./models/user');
+// // const MongoStore = require("connect-mongo");
+// const mongoSanitize = require('express-mongo-sanitize');
 
-// Initialize Open AI and Unsplash libraries
-const { Configuration, OpenAIApi } = require("openai");
+// // Initialize Open AI and Unsplash libraries
+// // const { Configuration, OpenAIApi } = require("openai");
+// import OpenAI from 'openai';
 
-const { createApi } = require("unsplash-js");
+// const { createApi } = require("unsplash-js");
+
+import express from 'express';
+import path from 'path';
+import axios from 'axios';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import mongoSanitize from 'express-mongo-sanitize';
+
+// Load environment variables
+dotenv.config();
+
+// Import models
+import Message from './models/messages.js';
+import User from './models/user.js';
+
+// If you plan to use connect-mongo
+// import MongoStore from 'connect-mongo';
+
+// OpenAI and Unsplash libraries
+import OpenAI from 'openai';
+import { createApi } from 'unsplash-js';
 
 // Initialize app
 const app = express();
@@ -46,18 +69,15 @@ let ai_response = '';
 let responseType = 0;
 let trial_limit = Number(process.env.TRIAL_LIMIT) || 50;
 const greetings = ["hello", "hey", "what's up", "who are you", "what is your name", "tell me about yourself", "hi", "hii", "ola"]
-const filter = ["erotic", "dick", "porn", "blowjob", "cum ", "pussy", "cock"];
 const thanks = ["thanks", "thank you", "thank", "great"];
 
 console.log(trial_limit);
 
 // Initialize API configuration for Open AI
-const configuration = new Configuration({
+const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
   
-const openai = new OpenAIApi(configuration);
-
 // Initialize API configuration for Unsplash
 const unsplash = createApi({
     accessKey: process.env.UNSPLASH_ACCESS_KEY,
@@ -65,7 +85,7 @@ const unsplash = createApi({
 
 
 // Enable body parser
-app.use(body_parser.json());
+app.use(bodyParser.json());
 
 //Sanitize queries for security - Does not allow queries with $ sign. $ is a part of Mongo queries 
 app.use(mongoSanitize());
@@ -101,6 +121,8 @@ app.post('/webhook', async (req, res) => {
             let phone_num_id = message_content.entry[0].changes[0].value.metadata.phone_number_id
             let from_number = message_content.entry[0].changes[0].value.messages[0].from;
             let message_body = message_content.entry[0].changes[0].value.messages[0].text.body;
+            let from_name = message_content.entry[0].changes[0].value.contacts[0].profile.name;
+            console.log(from_name);
 
             console.log(`Message from ${from_number} - ${message_body}`)
             let textResponse = '';
@@ -325,8 +347,8 @@ async function fetchAIResponse(context, contextReply, message_body) {
     console.log("Context is", context, ". Context reply is", contextReply, ". Message body is", message_body);
 
     // Fetch AI response to your question
-    ai_response = await openai.createChatCompletion({
-        model: "gpt-3.5-turbo",
+    ai_response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
         messages: [
             {role: "system", content: "Your name is Toffee, an intelligent AI assistant developed by Faiz Darvesh that helps with answering questions and writing."},
             {role: "user", content: `As Toffee, help me complete this request. ${context}.`},

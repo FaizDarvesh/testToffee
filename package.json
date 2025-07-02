@@ -8,7 +8,7 @@
     "mongodb": "^4.13.0",
     "mongoose": "^6.8.2",
     "nodemon": "^2.0.20",
-    "openai": "^3.2.1",
+    "openai": "^5.8.2",
     "path": "^0.12.7",
     "unsplash-js": "^7.0.15"
   },
@@ -25,5 +25,6 @@
     "test"
   ],
   "author": "Faiz",
-  "license": "ISC"
+  "license": "ISC",
+  "type": "module"
 }
