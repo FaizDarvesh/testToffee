@@ -113,6 +113,8 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
 
     let message_content = req.body;
+    let userPlan = "";
+    // console.log("BODY:", message_content);
 
     if(message_content.object){
         console.log(message_content.entry[0].changes[0])
@@ -202,8 +204,6 @@ app.post('/webhook', async (req, res) => {
                 } else if (messageLength < 5) {
                     // Manage the super short prompts - ask for more detail
                     textResponse = 'I am sorry! Can you please provide more information?'
-                } else if (filter.some(string => message_body_LC.includes(string))) {
-                    textResponse = "Sorry, your request violates the usage policy for Toffee and Open AI. You are advised to adhere to the usage guidelines. Please consider this a warning.\n\nIf you feel this message was an error, please reach out to feedback@faizdarvesh.com."
                 } else if (messageLength > 950) {
                     textResponse = 'Sorry, that is too lengthy for me to process right away. Can you please ask that more concisely?'
                 } else if (messageCount > trial_limit) {
@@ -358,8 +358,8 @@ async function fetchAIResponse(context, contextReply, message_body) {
         max_tokens: 450,
         temperature: 0.1,
     });
-
-    return ai_response.data.choices[0].message.content;
+    // console.log(ai_response.choices[0].message);
+    return ai_response.choices[0].message.content;
 }
 
 
