@@ -384,7 +384,7 @@ async function sendReply(from_number, textResponse, phone_num_id, whatsappToken,
 
     } else if (responseType === "location") {
 
-        locationParams = textResponse.split(";");
+        let locationParams = textResponse.split(";");
         let locName = locationParams[0].toUpperCase();
         let latValue = locationParams[1];
         let longValue = locationParams[2];
@@ -457,9 +457,11 @@ async function fetchImage(imageSubject) {
             perPage: 5,
         });
         
+        console.log(unsplashResponse);
+
         let indexOfImage = Math.floor(Math.random() * 5) + 1
         
-        imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
+        let imgURL = unsplashResponse.response.results[indexOfImage].urls.small;
         return imgURL;
 
     } catch(error) {
@@ -485,6 +487,7 @@ async function fetchLocation(locationSubject) {
         if (gmapResponse.ok) {
 
             const data = await gmapResponse.json();
+            console.log(data)
             
             if(data.results.length) {
 
@@ -519,6 +522,7 @@ async function fetchWiki(wikiSubject) {
     try{ 
     
         let wikiDescription = '';
+        let wikiAnswer = '';
         let articleURL = '';
         let wikiResponse = await fetch(`https://api.wikimedia.org/core/v1/wikipedia/en/search/page?q=${wikiSubject}&limit=1`)
 
